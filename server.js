@@ -14,6 +14,7 @@ const RENDER_URL = String(process.env.RENDER_EXTERNAL_URL || '').trim().replace(
 const WEBHOOK_URL = String(process.env.WEBHOOK_URL || '').trim()
   || (RENDER_URL ? `${RENDER_URL}/api/telegram-webhook` : '');
 const MINIAPP_LINK = String(process.env.MINIAPP_LINK || '').trim().replace(/\/+$/, '');
+const WEBAPP_URL = String(process.env.WEBAPP_URL || '').trim().replace(/\/+$/, '') || RENDER_URL;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DEFAULT_AMOUNT = 50;
 const MIN_AMOUNT = 1;
@@ -252,32 +253,69 @@ function panel(uid) {
 const showPanel = (chat, uid) => send(chat, '🛠 Админ-панель', panel(uid));
 const backRow = [{ text: '⬅️ Меню', callback_data: 'a:menu' }];
 
+function appButton() {
+  if (WEBAPP_URL) return { text: '🚀 Открыть игру', web_app: { url: WEBAPP_URL } };
+  return { text: '🚀 Открыть игру', url: MINIAPP_LINK || 'https://t.me' };
+}
+
+function normalizeStartPayload(raw) {
+  if (!raw) return '';
+  if (db.links[raw]) return raw;
+  if (/^ref_[a-z0-9]{6,16}$/i.test(raw)) return raw;
+  if (/^[a-z0-9]{6,16}$/i.test(raw)) return 'ref_' + raw;
+  return '';
+}
+
+function welcomeText(uid) {
+  const lines = [
+    '⭐⭐⭐',
+    '',
+    '🎯 <b>Раздай звёзды!</b>',
+    '',
+    '👊 Бей Пепе, качай уровень и забирай подарки:',
+    '🧸 мишка — за 10 кликов в секунду',
+    '🧸 мишка — за 8 уровень',
+    '🌹 роза — за 15 уровень',
+    '',
+    '🎁 За каждого друга — <b>50%</b> от его звёзд',
+    '💸 Вывод звёзд от 50 ⭐',
+    ''
+  ];
+  if (isAdmin(uid)) lines.push('🛠 /admin — панель управления', '');
+  lines.push('👇 Погнали');
+  return lines.join('\n');
+}
+
 async function handleMessage(msg) {
   if (!msg.from || msg.from.is_bot) return;
   const uid = String(msg.from.id), chat = msg.chat.id;
-  const text = (msg.text || '').trim().replace(/@\w+$/, '');
-  if (!text) return;
+  const raw = (msg.text || '').trim();
 
-  // бутстрап: первый /admin при пустом OWNER_ID становится владельцем
-  if (/^\/admin$/i.test(text) && !ownerId()) {
-    db.ownerId = uid; save();
-    await send(chat, `👑 Вы назначены владельцем (id ${uid}). Сохраните это в OWNER_ID на Render.`);
+  const startMatch = /^\/start(?:@\w+)?(?:\s+(\S+))?$/i.exec(raw);
+  if (startMatch) {
+    touchUser(msg.from, normalizeStartPayload(startMatch[1] || ''));
+    return send(chat, welcomeText(uid), {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: [[appButton()]] }
+    });
   }
 
-  if (/^\/(start|admin)$/i.test(text)) {
+  const text = raw.replace(/@\w+$/, '');
+  if (!text) return;
+
+  if (/^\/admin$/i.test(text)) {
+    if (!ownerId()) {
+      db.ownerId = uid; save();
+      await send(chat, `👑 Вы назначены владельцем (id ${uid}). Сохраните это в OWNER_ID на Render.`);
+    }
     if (!isAdmin(uid)) {
       return send(chat, `⛔ Нет доступа.\nВаш ID: ${uid}\nПришлите его владельцу, чтобы он добавил вас в админы.`);
     }
     delete db.states[uid]; save();
-    if (/^\/start$/i.test(text)) {
-      await send(chat, 'Нажми кнопку ниже, чтобы открыть игру 👇',
-        { reply_markup: { inline_keyboard: [[{ text: '🎮 Открыть игру', web_app: MINIAPP_LINK ? { url: MINIAPP_LINK } : undefined }]] } });
-    }
     return showPanel(chat, uid);
   }
 
   if (/^\/id$/i.test(text)) return send(chat, `Ваш Telegram ID: ${uid}`);
-
   const st = db.states[uid];
   if (!st || !isAdmin(uid)) return;
   if (text.startsWith('/')) { delete db.states[uid]; save(); return send(chat, 'Отменено.', kb([backRow])); }
