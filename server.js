@@ -10,7 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------- настройки ----------
 const OWNER_ID = String(process.env.OWNER_ID || '').trim();
-const WEBHOOK_URL = String(process.env.WEBHOOK_URL || '').trim();
+const RENDER_URL = String(process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
+const WEBHOOK_URL = String(process.env.WEBHOOK_URL || '').trim()
+  || (RENDER_URL ? `${RENDER_URL}/api/telegram-webhook` : '');
 const MINIAPP_LINK = String(process.env.MINIAPP_LINK || '').trim().replace(/\/+$/, '');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DEFAULT_AMOUNT = 50;
@@ -27,6 +29,7 @@ const REWARDS = {
 };
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '32kb' }));
 
 // ---------- хранилище ----------
@@ -429,19 +432,43 @@ app.get(['/', '/index.html'], (_req, res) => {
   res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+// Диагностика: что Telegram реально знает о вебхуке
+app.get('/api/diag', async (req, res) => {
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (secret && req.query.key !== secret) return res.status(401).send('Добавьте ?key=TELEGRAM_WEBHOOK_SECRET');
+  const info = await tg('getWebhookInfo', {});
+  const me = await tg('getMe', {});
+  res.json({
+    bot: me.result ? '@' + me.result.username : me,
+    webhook: info.result || info,
+    target: WEBHOOK_URL || null,
+    secretSet: !!secret,
+    ownerSet: !!OWNER_ID
+  });
+});
+
+// Принудительно переставить вебхук на текущий адрес сервиса
+app.get('/api/setup-webhook', async (req, res) => {
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (secret && req.query.key !== secret) return res.status(401).send('Добавьте ?key=TELEGRAM_WEBHOOK_SECRET');
+  const target = WEBHOOK_URL || `https://${req.get('host')}/api/telegram-webhook`;
+  const r = await registerWebhook(target);
+  const info = await tg('getWebhookInfo', {});
+  res.json({ setWebhook: r.ok ? 'OK' : r, webhook: info.result });
+});
 app.use((req, res) => res.status(404).send('Not found'));
 
-async function registerWebhook() {
-  if (!WEBHOOK_URL) { console.warn('WEBHOOK_URL не задан — вебхук нужно ставить вручную.'); return; }
+async function registerWebhook(target) {
+  const url = target || WEBHOOK_URL;
+  if (!url) { console.warn('Не удалось определить адрес вебхука. Задайте WEBHOOK_URL.'); return { ok: false, description: 'no url' }; }
   const r = await tg('setWebhook', {
-    url: WEBHOOK_URL,
-    secret_token: process.env.TELEGRAM_WEBHOOK_SECRET || undefined,
+    url,
+    ...(process.env.TELEGRAM_WEBHOOK_SECRET ? { secret_token: process.env.TELEGRAM_WEBHOOK_SECRET } : {}),
     allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
     drop_pending_updates: true
   });
-  console.log('setWebhook:', r.ok ? 'OK' : JSON.stringify(r));
-  const info = await tg('getWebhookInfo', {});
-  console.log('webhook info:', JSON.stringify(info.result || info));
+  console.log('setWebhook →', url, r.ok ? 'OK' : JSON.stringify(r));
+  return r;
 }
 
 app.listen(PORT, '0.0.0.0', () => {
