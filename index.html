@@ -124,9 +124,9 @@
 <div class="sheet hidden" id="sheet" aria-hidden="true" inert>
 <div class="sheet-card" role="dialog" aria-label="Награды">
 <div class="sheet-head"><span>🎁 Награды</span><button class="x" id="sheetClose" type="button" aria-label="Закрыть">✕</button></div>
-<div class="sec"><div class="sec-t">ЗА ДОСТИЖЕНИЯ</div><ul class="rw-list" id="rwList"></ul><p class="sec-p">Подарки выдаёт администратор вручную после проверки.</p></div>
+<div class="sec"><div class="sec-t">ЗА ДОСТИЖЕНИЯ</div><ul class="rw-list" id="rwList"></ul><p class="sec-p">Мишка — 15 ⭐, Роза — 25 ⭐. Выдача вручную после проверки.</p></div>
 <div class="sec"><div class="sec-t">РЕФЕРАЛЬНАЯ ССЫЛКА</div><div class="refbox" id="refLink">—</div><div class="row"><button class="mini" id="refCopy" type="button">Копировать</button><button class="mini" id="refShare" type="button">Поделиться</button></div><p class="sec-p">Вы получаете <b>50%</b> от звёзд, полученных рефералом.</p></div>
-<div class="sec"><div class="sec-t">БАЛАНС</div><div class="bal"><span id="bal">0</span> ⭐</div><div class="row"><input id="wdAmount" type="number" inputmode="numeric" min="50" step="1" placeholder="Сумма, от 50"><button class="mini main" id="wdBtn" type="button">Вывести</button></div><p class="sec-p" id="wdNote">Вывод от 50 ⭐. Выплаты одобряются вручную.</p></div>
+<div class="sec"><div class="sec-t">БАЛАНС</div><div class="bal"><span id="bal">0</span> ⭐</div><div class="row"><input id="wdAmount" type="number" inputmode="numeric" min="50" step="1" placeholder="Сумма, от 50"><button class="mini main" id="wdBtn" type="button">Вывести</button></div><p class="sec-p">Вы получаете <b>50%</b> от звёзд, полученных рефералом. Ссылка персональная.</p></div>
 </div></div>
 </div>
 <script>
@@ -351,12 +351,12 @@ ui.hit.addEventListener('click',()=>{
  ui.hitText.textContent=texts[Math.floor(Math.random()*texts.length)];
  ui.combo.textContent=`СЕРИЯ ×${streak}`;ui.combo.classList.toggle('on',streak>=4);launch();
  if(clicks.filter(t=>now-t<1000).length>=10)claim('bear_cps');
- if(totalTapCount>30&&clicks.length>=4)openModal();
+ if(totalTapCount>30&&clicks.length>=4&&state.level>=3&&!awaitingInvoice)openModal();
 });
 // ---------- Награды, реф-ссылка, баланс ----------
 const rewardDefs=[
- {id:'bear_cps',icon:'🧸',text:'Мишка — 10+ кликов/сек',prog:()=>'нужно 10 кликов за секунду'},
- {id:'bear_lvl8',icon:'🧸',text:'Мишка — 8 уровень',prog:()=>`уровень ${Math.min(state.record,8)} / 8`},
+ {id:'bear_cps',icon:'🧸',text:'Мишка (15 ⭐) — 10+ кликов/сек',prog:()=>'нужно 10 кликов за секунду'},
+ {id:'bear_lvl8',icon:'🧸',text:'Мишка (15 ⭐) — 8 уровень',prog:()=>`уровень ${Math.min(state.record,8)} / 8`},
  {id:'rose_lvl15',icon:'🌹',text:'Роза (25 ⭐) — 15 уровень',prog:()=>`уровень ${Math.min(state.record,15)} / 15`}
 ];
 let me={balance:0,rewards:{},refLink:null,minWithdraw:50},meLoaded=false,sheetOpen=false;const claiming=new Set();
